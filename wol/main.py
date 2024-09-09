@@ -198,5 +198,38 @@ def wol(interface, target_mac, broadcast, password, count, interval, verbose):
             raise click.ClickException(f'Exception: {e}')
 
 
+def magic_packet_body(target_mac, password):
+    return b'\xff' * 6 + target_mac.to_bytes() * 16 + password
+
+
+@click.command(context_settings=CONTEXT_SETTINGS, epilog=EPILOG)
+@click.argument('interface', type=click.STRING, callback=validate_interface)
+@click.argument('target_mac', type=click.STRING, callback=parse_target_mac)
+@click.argument('broadcast_ip_addr', type=click.STRING)
+@click.option('-p', 'password', type=click.STRING, show_default=True, default='', callback=parse_password, metavar='password',
+              help='An optional 4 or 6 byte password, in ethernet hex format or quad-dotted decimal')
+def wol_udp(interface, target_mac, broadcast_ip_addr, password):
+    # Create a UDP socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+    # Enable broadcasting mode
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+
+    # Bind the socket to a specific network interface (e.g., 'eth0')
+    sock.setsockopt(socket.SOL_SOCKET, 25, interface.encode('utf-8') + b'\0')
+
+    # Define the broadcast address and port
+    port = 9
+
+    for mac in target_mac:
+        # Define the message to be sent
+        message = magic_packet_body(mac, password)
+        # Send the broadcast message
+        sock.sendto(message, (broadcast_ip_addr, port))
+
+    print(f"Broadcast message sent to {broadcast_ip_addr}:{port}")
+
+
 if __name__ == '__main__':
-    wol()
+    # wol()
+    wol_udp()
